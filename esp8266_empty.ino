@@ -15,8 +15,11 @@
 
 #include <ArduinoJson.h>
 
+
 bool LAMBA_STATUS = false;
 bool RGB_STATUS = false;
+bool SERVER_STATUS = false;
+bool COLLER_FAN_STATUS = false;
 int LAMBA_PIN = D1;
 int RGB_PIN = D2;
 
@@ -27,14 +30,13 @@ const int sensor_hand_trigger_led = D6;
 long duration;
 int distance;
 
-const String ESP_ID = "b2c4b984-dd3b-4a66-9731-67754cc19fd1";
-const String TOKEN = "b2c4b984-dd3b-4a66-9731-67754cc19fd1";
+const String ESP_ID = "<esp_id>";
+const String TOKEN = "<esp_id>";
 
-const char* API_HOST = "smart-room-production.up.railway.app";
-//const char* API_HOST = "192.168.0.111";
+const char* API_HOST = "serverhostaddress.com";
 const int PORT = 443;
 //const int PORT = 8000;
-const char* PATH = "/ws/communication/esp/b2c4b984-dd3b-4a66-9731-67754cc19fd1";
+const char* PATH = "/ws/communication/esp/<esp_id>";
 
 
 ESP8266WiFiMulti WiFiMulti;
@@ -46,7 +48,9 @@ WebSocketsClient webSocket;
 int led_scoket_ping_pong = D8;
 int har_sensor = D7;
 
-int send_msg_btn = D3; 
+int coller_fan_pin = D3; 
+const int server_pin = D4; 
+
 
 #define USE_SERIAL Serial
 void pargosden(){
@@ -62,6 +66,10 @@ void key_status(String key,bool status){
   }
   if (key == "RGB_PIN"){
     RGB_STATUS = status;
+    status_apply(); 
+  }
+  if (key == "SERVER_PIN"){
+    SERVER_STATUS = status;
     status_apply(); 
   }
 }
@@ -150,13 +158,15 @@ void setup() {
   // master sensor pins
   pinMode(sensor_hand_pin, INPUT);
   pinMode(sensor_hand_trigger_led, OUTPUT);
+//test*
+  pinMode(server_pin, INPUT);
 
-  pinMode(send_msg_btn, INPUT);
+//
   pinMode(led_scoket_ping_pong,OUTPUT);
   digitalWrite(led_scoket_ping_pong,HIGH);
 
   pinMode(har_sensor, INPUT);
-
+  pinMode(A0, INPUT);
     // JSON verisi burada yer alacak
   char json[] = "{\"name\":\"John\",\"age\":30,\"city\":\"New York\"}";
   
@@ -199,17 +209,15 @@ void setup() {
 		USE_SERIAL.flush();
 		delay(1000);
 	}
-  WiFiMulti.addAP("ECHO", "1afsbns1");
-	//WiFiMulti.addAP("PARS", "1afsbns1");
-
+  WiFiMulti.addAP("wifi-name", "wifi-password");
 	//WiFi.disconnect();
 	while(WiFiMulti.run() != WL_CONNECTED) {
 		delay(100);
 	}
 
 	// server address, port and URL
-	webSocket.begin( "192.168.0.111", 8000 , "/ws/communication/esp/b2c4b984-dd3b-4a66-9731-67754cc19fd1");
-  //webSocket.beginSSL( API_HOST, PORT , PATH);
+	//webSocket.begin( "192.168.0.111", 8000 , "/ws/communication/esp/id");
+  webSocket.beginSSL( API_HOST, PORT , PATH);
 
 	// event handler
 	webSocket.onEvent(webSocketEvent);
@@ -227,30 +235,59 @@ void setup() {
   webSocket.enableHeartbeat(15000, 3000, 10);
 
 }
+unsigned long previousMillis = 0; 
+const long interval = 10000;  
+
+unsigned long previousFanMillis = 0; 
+const long fan_interval = 1000 * 60 * 60;  // 60 dakika (60 * 60 * 1000 ms)
+const long fan_duration = 1000 * 60 * 5;  // 5 dakika (5 * 60 * 1000 ms)
 
 void loop() {
+
+
+ 
 	webSocket.loop();
-  
-  if (webSocket.isConnected()){
+
+  unsigned long currentMillis = millis();
 
   int har_sensor_value = digitalRead(har_sensor); 
  
   if (har_sensor_value == 1){
-    digitalWrite(sensor_hand_trigger_led,HIGH);
-    delay(1000);
-    digitalWrite(sensor_hand_trigger_led,LOW);
-    send_key_status(2, true);
-  }
 
-}
+    if (currentMillis - previousMillis >= interval) {
+      digitalWrite(sensor_hand_trigger_led,HIGH);
+      //delay(1000);
+      digitalWrite(sensor_hand_trigger_led,LOW);
+      previousMillis = currentMillis;
+      send_key_status(2, true);
+    }
+  }
 
   int sensor_hand_value = digitalRead(sensor_hand_pin); 
 
   if ( sensor_hand_value == 0){
   //	USE_SERIAL.println("hand triger" );
     change_master_key_status();
-    delay(1000);
+    delay(500);
+    previousMillis = currentMillis;
 
+  }
+
+
+  // Belirli bir süre geçti mi kontrol edin
+  if (currentMillis - previousFanMillis >= fan_interval) {
+    // Fanı belirli bir süre güçlendirin
+    if (currentMillis - previousFanMillis < fan_interval + fan_duration) {
+      // Fan güç veriliyor
+      Serial.println("Fan güçlendiriliyor");
+      COLLER_FAN_STATUS = true;
+    } else {
+      // Fan güç kesiliyor
+      Serial.println("Fan güç kesiliyor");
+      COLLER_FAN_STATUS = false;
+      previousFanMillis = currentMillis;  // Sonraki güç verme için zamanı güncelle
+    }
+    status_apply();
   }
 
 }
@@ -260,9 +297,9 @@ void change_master_key_status(){
     
   LAMBA_STATUS = !LAMBA_STATUS;
   status_apply();
-  if(webSocket.isConnected()){
-    send_key_status(1, LAMBA_STATUS);
-  }
+  
+  send_key_status(1, LAMBA_STATUS);
+  
 } 
 
 void status_apply(){
@@ -283,12 +320,44 @@ void status_apply(){
     digitalWrite(RGB_PIN,HIGH);
   
   }
+  if (COLLER_FAN_STATUS){
+    pinMode(coller_fan_pin,OUTPUT);
+    digitalWrite(coller_fan_pin,LOW);
+
+  }else{
+    pinMode(coller_fan_pin,INPUT);
+    digitalWrite(coller_fan_pin,HIGH);
+  
+  }
+  if (SERVER_STATUS){
+      open_server();
+  }else{
+      USE_SERIAL.print("sercer c");
+
+    pinMode(server_pin,INPUT);
+    digitalWrite(server_pin,HIGH);
+  }
+  
+}
+
+void open_server(){
+      USE_SERIAL.print("SERVER S");
+
+    pinMode(server_pin,OUTPUT);
+    digitalWrite(server_pin,LOW);
+    delay(100);
+    pinMode(server_pin,INPUT);
+    digitalWrite(server_pin,HIGH);
+      USE_SERIAL.print("SERVER s e");
+
 }
 
 
-
 void send_key_status(int pin_id, bool status){
+  if(webSocket.isConnected()){
     String json = "{\"type\":\"set_master_key\",\"status\":\"" + String(status) + "\",\"id\":\"" + String(pin_id) + "\"}";
     webSocket.sendTXT(json);
+  }
+
 }
 
