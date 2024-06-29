@@ -15,6 +15,8 @@
 
 #include <ArduinoJson.h>
 
+#include <config.h>
+
 
 bool LAMBA_STATUS = false;
 bool RGB_STATUS = false;
@@ -30,13 +32,13 @@ const int sensor_hand_trigger_led = D6;
 long duration;
 int distance;
 
-const String ESP_ID = "<esp_id>";
-const String TOKEN = "<esp_id>";
+const String ESP_ID = "dcde7e17-791d-48c7-bbd9-bdfb6379f319";
+const String TOKEN = "dcde7e17-791d-48c7-bbd9-bdfb6379f319";
 
-const char* API_HOST = "serverhostaddress.com";
+const char* API_HOST = "smartapp.farukseker.com.tr";
 const int PORT = 443;
 //const int PORT = 8000;
-const char* PATH = "/ws/communication/esp/<esp_id>";
+const char* PATH = "/ws/communication/esp/dcde7e17-791d-48c7-bbd9-bdfb6379f319";
 
 
 ESP8266WiFiMulti WiFiMulti;
@@ -209,7 +211,7 @@ void setup() {
 		USE_SERIAL.flush();
 		delay(1000);
 	}
-  WiFiMulti.addAP("wifi-name", "wifi-password");
+  WiFiMulti.addAP("pars", "1afsbns1");
 	//WiFi.disconnect();
 	while(WiFiMulti.run() != WL_CONNECTED) {
 		delay(100);
@@ -217,7 +219,7 @@ void setup() {
 
 	// server address, port and URL
 	//webSocket.begin( "192.168.0.111", 8000 , "/ws/communication/esp/id");
-  webSocket.beginSSL( API_HOST, PORT , PATH);
+  webSocket.beginSSL(API_HOST, PORT , PATH);
 
 	// event handler
 	webSocket.onEvent(webSocketEvent);
